@@ -5,6 +5,9 @@ MZCreatorFlow = {
   currentAppearance = nil
 }
 
+local autoOpenChecked = false
+local spawnAppearanceApplying = false
+
 local function notify(message)
   if lib and lib.notify then
     lib.notify(message)
@@ -18,9 +21,62 @@ local function getDefaultAppearance(model)
   return MZCreatorAppearance.defaultForModel(model or 'mp_m_freemode_01')
 end
 
+local function isFirstLoginMode()
+  local autoConfig = Config.AutoOpen or {}
+  return MZCreatorFlow.mode == (autoConfig.mode or 'first_login')
+end
+
+local function shouldApplySavedAppearance()
+  local creatorConfig = Config.Creator or {}
+  return creatorConfig.applySavedAppearanceOnSpawn == true
+end
+
+local function applySavedAppearance(state)
+  if not state or state.ok ~= true or state.hasAppearance ~= true or type(state.appearance) ~= 'table' then
+    return false
+  end
+
+  return MZCreatorAppearance.apply(state.appearance) == true
+end
+
+local function applySavedAppearanceAfterSpawn()
+  if not shouldApplySavedAppearance() or spawnAppearanceApplying then
+    return
+  end
+
+  spawnAppearanceApplying = true
+
+  CreateThread(function()
+    local creatorConfig = Config.Creator or {}
+    local delay = tonumber(creatorConfig.applySavedAppearanceDelayMs) or 800
+    if delay > 0 then
+      Wait(delay)
+    end
+
+    if not MZCreatorFlow.open then
+      local state = lib.callback.await('mz_creator:server:getState', false)
+      if state and state.characterCreated == true then
+        applySavedAppearance(state)
+      end
+    end
+
+    spawnAppearanceApplying = false
+  end)
+end
+
 local function closeCreator(cancelled)
   if not MZCreatorFlow.open then
-    return
+    return true
+  end
+
+  if cancelled and isFirstLoginMode() then
+    SetNuiFocus(true, true)
+    notify({
+      type = 'error',
+      title = 'Creator',
+      description = 'Voce precisa salvar seu personagem antes de sair.'
+    })
+    return false
   end
 
   SetNuiFocus(false, false)
@@ -33,14 +89,15 @@ local function closeCreator(cancelled)
 
   MZCreatorFlow.open = false
   MZCreatorFlow.mode = 'manual'
+  return true
 end
 
-function MZCreatorFlow.openCreator(mode)
+function MZCreatorFlow.openCreator(mode, preloadedState)
   if MZCreatorFlow.open then
     return
   end
 
-  local state = lib.callback.await('mz_creator:server:getState', false)
+  local state = preloadedState or lib.callback.await('mz_creator:server:getState', false)
   if not state or state.ok ~= true then
     notify({
       type = 'error',
@@ -86,13 +143,52 @@ RegisterNetEvent('mz_creator:client:applyAppearance', function(appearance)
   MZCreatorAppearance.apply(appearance)
 end)
 
+RegisterNetEvent('mz_core:client:playerLoaded', function()
+  local autoConfig = Config.AutoOpen or {}
+  if autoConfig.enabled ~= true or autoOpenChecked then
+    return
+  end
+
+  autoOpenChecked = true
+
+  CreateThread(function()
+    local delay = tonumber(autoConfig.delayMs) or 1200
+    if delay > 0 then
+      Wait(delay)
+    end
+
+    if MZCreatorFlow.open then
+      return
+    end
+
+    local state = lib.callback.await('mz_creator:server:getState', false)
+    if not state or state.ok ~= true then
+      return
+    end
+
+    if state.characterCreated ~= true then
+      MZCreatorFlow.openCreator(autoConfig.mode or 'first_login', state)
+    else
+      applySavedAppearance(state)
+    end
+  end)
+end)
+
+AddEventHandler('playerSpawned', function()
+  applySavedAppearanceAfterSpawn()
+end)
+
 RegisterNUICallback('ready', function(_, cb)
   cb({ ok = true })
 end)
 
 RegisterNUICallback('close', function(_, cb)
-  closeCreator(true)
-  cb({ ok = true })
+  local closed = closeCreator(true)
+  cb({
+    ok = closed == true,
+    error = closed == true and nil or 'character_required',
+    detail = closed == true and nil or 'Voce precisa salvar seu personagem antes de sair.'
+  })
 end)
 
 RegisterNUICallback('previewAppearance', function(data, cb)
@@ -130,6 +226,15 @@ RegisterNUICallback('setCameraMode', function(data, cb)
 end)
 
 RegisterNUICallback('saveAppearance', function(data, cb)
+  if isFirstLoginMode() then
+    cb({
+      ok = false,
+      error = 'character_required',
+      detail = 'Preencha a identidade e salve o personagem.'
+    })
+    return
+  end
+
   local appearance = data and (data.appearance_json or data.appearance or data) or nil
   if type(appearance) ~= 'table' then
     cb({ ok = false, error = 'invalid_appearance' })
@@ -185,14 +290,22 @@ CreateThread(function()
       DisableControlAction(0, 2, true)
       DisableControlAction(0, 24, true)
       DisableControlAction(0, 25, true)
+      DisableControlAction(0, 22, true)
+      DisableControlAction(0, 23, true)
       DisableControlAction(0, 30, true)
       DisableControlAction(0, 31, true)
       DisableControlAction(0, 32, true)
       DisableControlAction(0, 33, true)
       DisableControlAction(0, 34, true)
       DisableControlAction(0, 35, true)
+      DisableControlAction(0, 37, true)
       DisableControlAction(0, 44, true)
+      DisableControlAction(0, 45, true)
       DisableControlAction(0, 75, true)
+      DisableControlAction(0, 140, true)
+      DisableControlAction(0, 141, true)
+      DisableControlAction(0, 142, true)
+      DisablePlayerFiring(PlayerId(), true)
       MZCreatorCamera.update()
       Wait(0)
     else

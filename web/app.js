@@ -23,6 +23,7 @@
 
   const state = {
     open: false,
+    mode: "manual",
     defaults: {},
     appearance: null,
     identity: null,
@@ -178,6 +179,7 @@
 
   function openCreator(data) {
     state.open = true;
+    state.mode = data.mode || "manual";
     state.defaults = data.defaults || {};
     state.appearance = clone(data.appearance || state.defaults.mp_m_freemode_01);
     state.identity = buildIdentity(data.state?.player?.charinfo, state.appearance);
@@ -190,7 +192,25 @@
 
   function closeCreator() {
     state.open = false;
+    state.mode = "manual";
     document.body.classList.remove("is-open");
+  }
+
+  function requestClose() {
+    post("close")
+      .then((result) => {
+        if (!result || result.ok !== true) {
+          showToast(result?.detail || result?.error || "Salve seu personagem antes de sair.");
+        }
+      })
+      .catch(() => {
+        if (state.mode === "first_login") {
+          showToast("Salve seu personagem antes de sair.");
+          return;
+        }
+
+        closeCreator();
+      });
   }
 
   window.addEventListener("message", (event) => {
@@ -260,7 +280,7 @@
   });
 
   document.getElementById("cancel-button").addEventListener("click", () => {
-    post("close").catch(() => closeCreator());
+    requestClose();
   });
 
   document.getElementById("save-button").addEventListener("click", () => {
@@ -283,7 +303,7 @@
     if (!state.open) return;
     if (event.key.toLowerCase() === "a") post("rotate", { amount: -5 }).catch(() => {});
     if (event.key.toLowerCase() === "d") post("rotate", { amount: 5 }).catch(() => {});
-    if (event.key === "Escape") post("close").catch(() => closeCreator());
+    if (event.key === "Escape") requestClose();
   });
 
   post("ready").catch(() => {});

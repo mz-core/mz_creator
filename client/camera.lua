@@ -14,6 +14,23 @@ local function getModeConfig(mode)
   }
 end
 
+local function lockCurrentPed()
+  if not MZCreatorCamera.active then
+    return
+  end
+
+  local ped = PlayerPedId()
+  if not ped or ped == 0 then
+    return
+  end
+
+  FreezeEntityPosition(ped, true)
+  SetPlayerInvincible(PlayerId(), true)
+  SetEntityInvincible(ped, true)
+  SetEntityCollision(ped, true, true)
+  SetPedCanRagdoll(ped, false)
+end
+
 local function pointCameraAtPed()
   if not MZCreatorCamera.active or not MZCreatorCamera.cam then
     return
@@ -38,9 +55,7 @@ function MZCreatorCamera.open(mode)
   MZCreatorCamera.mode = mode or (Config.Creator and Config.Creator.defaultCameraMode) or 'face'
   MZCreatorCamera.active = true
 
-  FreezeEntityPosition(ped, true)
-  SetPlayerInvincible(PlayerId(), true)
-  SetEntityCollision(ped, true, true)
+  lockCurrentPed()
 
   if MZCreatorCamera.cam and DoesCamExist(MZCreatorCamera.cam) then
     DestroyCam(MZCreatorCamera.cam, false)
@@ -69,7 +84,9 @@ function MZCreatorCamera.close()
 
   FreezeEntityPosition(ped, false)
   SetPlayerInvincible(PlayerId(), false)
+  SetEntityInvincible(ped, false)
   SetEntityCollision(ped, true, true)
+  SetPedCanRagdoll(ped, true)
 end
 
 function MZCreatorCamera.setMode(mode)
@@ -85,5 +102,6 @@ function MZCreatorCamera.rotate(amount)
 end
 
 function MZCreatorCamera.update()
+  lockCurrentPed()
   pointCameraAtPed()
 end
