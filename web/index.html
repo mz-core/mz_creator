@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>mz_creator</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main id="creator" class="creator">
+    <aside class="creator-panel creator-panel-left">
+      <header>
+        <span>mz creator</span>
+        <strong>Identidade</strong>
+      </header>
+
+      <section class="identity-form" aria-label="Identidade">
+        <label>
+          <span>Nome</span>
+          <input id="firstname" type="text" maxlength="24" autocomplete="off">
+        </label>
+        <label>
+          <span>Sobrenome</span>
+          <input id="lastname" type="text" maxlength="24" autocomplete="off">
+        </label>
+        <label>
+          <span>Nascimento</span>
+          <input id="birthdate" type="date">
+        </label>
+        <label>
+          <span>Genero</span>
+          <select id="gender">
+            <option value="male">Masculino</option>
+            <option value="female">Feminino</option>
+          </select>
+        </label>
+        <label>
+          <span>Nacionalidade</span>
+          <input id="nationality" type="text" maxlength="32" autocomplete="off">
+        </label>
+      </section>
+
+      <section class="model-switch" aria-label="Modelo">
+        <button class="model-button is-active" type="button" data-model="mp_m_freemode_01">
+          <span>Masculino</span>
+        </button>
+        <button class="model-button" type="button" data-model="mp_f_freemode_01">
+          <span>Feminino</span>
+        </button>
+      </section>
+
+      <section class="camera-switch" aria-label="Camera">
+        <button class="camera-button is-active" type="button" data-mode="face">Rosto</button>
+        <button class="camera-button" type="button" data-mode="body">Corpo</button>
+      </section>
+
+      <section class="rotate-row" aria-label="Rotacao">
+        <button id="rotate-left" type="button">A</button>
+        <span>Rotacao</span>
+        <button id="rotate-right" type="button">D</button>
+      </section>
+    </aside>
+
+    <aside class="creator-panel creator-panel-right">
+      <header>
+        <span>Preview</span>
+        <strong>Basico</strong>
+      </header>
+
+      <div id="sliders" class="sliders"></div>
+
+      <footer>
+        <button id="cancel-button" class="ghost-button" type="button">Cancelar</button>
+        <button id="save-button" class="save-button" type="button">Salvar</button>
+      </footer>
+    </aside>
+
+    <div id="toast" class="toast"></div>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
