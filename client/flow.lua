@@ -2,7 +2,9 @@ MZCreatorFlow = {
   open = false,
   mode = 'manual',
   savedAppearance = nil,
-  currentAppearance = nil
+  currentAppearance = nil,
+  previousCoords = nil,
+  previousHeading = nil
 }
 
 local autoOpenChecked = false
@@ -87,8 +89,19 @@ local function closeCreator(cancelled)
     MZCreatorAppearance.apply(MZCreatorFlow.savedAppearance)
   end
 
+  -- Restaurar posição anterior se existir
+  if MZCreatorFlow.previousCoords then
+    local ped = PlayerPedId()
+    SetEntityCoords(ped, MZCreatorFlow.previousCoords.x, MZCreatorFlow.previousCoords.y, MZCreatorFlow.previousCoords.z, false, false, false, false)
+    if MZCreatorFlow.previousHeading then
+      SetEntityHeading(ped, MZCreatorFlow.previousHeading)
+    end
+  end
+
   MZCreatorFlow.open = false
   MZCreatorFlow.mode = 'manual'
+  MZCreatorFlow.previousCoords = nil
+  MZCreatorFlow.previousHeading = nil
   return true
 end
 
@@ -114,6 +127,21 @@ function MZCreatorFlow.openCreator(mode, preloadedState)
   MZCreatorFlow.savedAppearance = state.appearance
   MZCreatorFlow.currentAppearance = appearance
 
+  -- Salvar posição anterior
+  local ped = PlayerPedId()
+  MZCreatorFlow.previousCoords = GetEntityCoords(ped)
+  MZCreatorFlow.previousHeading = GetEntityHeading(ped)
+
+  -- Teleportar para spawn location do creator
+  local creatorConfig = Config.Creator or {}
+  local spawnLoc = creatorConfig.spawnLocation
+  if spawnLoc and spawnLoc.coords then
+    SetEntityCoords(ped, spawnLoc.coords.x, spawnLoc.coords.y, spawnLoc.coords.z, false, false, false, false)
+    if spawnLoc.heading then
+      SetEntityHeading(ped, spawnLoc.heading)
+    end
+  end
+
   MZCreatorAppearance.apply(appearance)
   MZCreatorCamera.open(Config.Creator and Config.Creator.defaultCameraMode or 'face')
 
@@ -127,7 +155,8 @@ function MZCreatorFlow.openCreator(mode, preloadedState)
     allowedModels = {
       'mp_m_freemode_01',
       'mp_f_freemode_01'
-    }
+    },
+    allowCameraRotation = (Config.Creator and Config.Creator.allowCameraRotation) ~= false
   })
 end
 

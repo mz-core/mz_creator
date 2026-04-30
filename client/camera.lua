@@ -1,7 +1,8 @@
 MZCreatorCamera = {
   active = false,
   cam = nil,
-  mode = nil
+  mode = nil,
+  orbitalRotation = 0.0
 }
 
 local function getModeConfig(mode)
@@ -41,9 +42,24 @@ local function pointCameraAtPed()
     return
   end
 
+  local creatorConfig = Config.Creator or {}
   local cfg = getModeConfig(MZCreatorCamera.mode)
-  local camCoords = GetOffsetFromEntityInWorldCoords(ped, cfg.offset.x, cfg.offset.y, cfg.offset.z)
-  local pointCoords = GetOffsetFromEntityInWorldCoords(ped, cfg.point.x, cfg.point.y, cfg.point.z)
+  local pedCoords = GetEntityCoords(ped)
+  local pointCoords = pedCoords + vec3(cfg.point.x, cfg.point.y, cfg.point.z)
+  local camCoords
+
+  -- Com a rotação desativada, a câmera deve respeitar exatamente o offset do config.
+  -- Antes ela começava em 0 graus no cálculo orbital, por isso ficava de lado.
+  if creatorConfig.allowCameraRotation == false then
+    camCoords = pedCoords + vec3(cfg.offset.x, cfg.offset.y, cfg.offset.z)
+  else
+    local angle = math.rad(MZCreatorCamera.orbitalRotation)
+    local distance = math.sqrt(cfg.offset.x ^ 2 + cfg.offset.y ^ 2)
+    local orbitalX = math.cos(angle) * distance
+    local orbitalY = math.sin(angle) * distance
+    local orbitalZ = cfg.offset.z
+    camCoords = pedCoords + vec3(orbitalX, orbitalY, orbitalZ)
+  end
 
   SetCamCoord(MZCreatorCamera.cam, camCoords.x, camCoords.y, camCoords.z)
   PointCamAtCoord(MZCreatorCamera.cam, pointCoords.x, pointCoords.y, pointCoords.z)
@@ -52,8 +68,13 @@ end
 
 function MZCreatorCamera.open(mode)
   local ped = PlayerPedId()
-  MZCreatorCamera.mode = mode or (Config.Creator and Config.Creator.defaultCameraMode) or 'face'
+  local creatorConfig = Config.Creator or {}
+  MZCreatorCamera.mode = mode or creatorConfig.defaultCameraMode or 'face'
   MZCreatorCamera.active = true
+
+  -- 90 graus coloca a câmera no eixo Y positivo, que é o mesmo sentido dos offsets
+  -- padrão do config: vec3(0.0, 0.82, 0.62).
+  MZCreatorCamera.orbitalRotation = tonumber(creatorConfig.cameraStartRotation or 90.0) or 90.0
 
   lockCurrentPed()
 
@@ -95,10 +116,12 @@ function MZCreatorCamera.setMode(mode)
 end
 
 function MZCreatorCamera.rotate(amount)
-  local ped = PlayerPedId()
-  local nextHeading = GetEntityHeading(ped) + (tonumber(amount) or 0.0)
-  SetEntityHeading(ped, nextHeading)
-  pointCameraAtPed()
+  local creatorConfig = Config.Creator or {}
+  -- Verifica se rotação de câmera está habilitada
+  if creatorConfig.allowCameraRotation ~= false then
+    MZCreatorCamera.orbitalRotation = MZCreatorCamera.orbitalRotation + (tonumber(amount) or 0.0)
+    pointCameraAtPed()
+  end
 end
 
 function MZCreatorCamera.update()

@@ -7,18 +7,72 @@
       : "mz_creator";
 
   const sliderDefs = [
-    { label: "Mistura do rosto", path: "headBlend.shapeMix", min: 0, max: 1, step: 0.01 },
-    { label: "Tom da pele", path: "headBlend.skinMix", min: 0, max: 1, step: 0.01 },
+    {
+      label: "Mistura do rosto",
+      path: "headBlend.shapeMix",
+      min: 0,
+      max: 1,
+      step: 0.01,
+    },
+    {
+      label: "Tom da pele",
+      path: "headBlend.skinMix",
+      min: 0,
+      max: 1,
+      step: 0.01,
+    },
     { label: "Cabelo", path: "hair.style", min: 0, max: 80, step: 1 },
     { label: "Cor do cabelo", path: "hair.color", min: 0, max: 63, step: 1 },
     { label: "Cor dos olhos", path: "eyeColor", min: 0, max: 31, step: 1 },
-    { label: "Largura do nariz", path: "faceFeatures.noseWidth", min: -1, max: 1, step: 0.01 },
-    { label: "Altura do nariz", path: "faceFeatures.nosePeakHeight", min: -1, max: 1, step: 0.01 },
-    { label: "Altura da sobrancelha", path: "faceFeatures.eyebrowHeight", min: -1, max: 1, step: 0.01 },
-    { label: "Macas do rosto", path: "faceFeatures.cheekboneHeight", min: -1, max: 1, step: 0.01 },
-    { label: "Maxilar", path: "faceFeatures.jawBoneWidth", min: -1, max: 1, step: 0.01 },
-    { label: "Labios", path: "faceFeatures.lipsThickness", min: -1, max: 1, step: 0.01 },
-    { label: "Queixo", path: "faceFeatures.chinBoneHeight", min: -1, max: 1, step: 0.01 }
+    {
+      label: "Largura do nariz",
+      path: "faceFeatures.noseWidth",
+      min: -1,
+      max: 1,
+      step: 0.01,
+    },
+    {
+      label: "Altura do nariz",
+      path: "faceFeatures.nosePeakHeight",
+      min: -1,
+      max: 1,
+      step: 0.01,
+    },
+    {
+      label: "Altura da sobrancelha",
+      path: "faceFeatures.eyebrowHeight",
+      min: -1,
+      max: 1,
+      step: 0.01,
+    },
+    {
+      label: "Macas do rosto",
+      path: "faceFeatures.cheekboneHeight",
+      min: -1,
+      max: 1,
+      step: 0.01,
+    },
+    {
+      label: "Maxilar",
+      path: "faceFeatures.jawBoneWidth",
+      min: -1,
+      max: 1,
+      step: 0.01,
+    },
+    {
+      label: "Labios",
+      path: "faceFeatures.lipsThickness",
+      min: -1,
+      max: 1,
+      step: 0.01,
+    },
+    {
+      label: "Queixo",
+      path: "faceFeatures.chinBoneHeight",
+      min: -1,
+      max: 1,
+      step: 0.01,
+    },
   ];
 
   const state = {
@@ -27,7 +81,7 @@
     defaults: {},
     appearance: null,
     identity: null,
-    previewTimer: null
+    previewTimer: null,
   };
 
   const slidersEl = document.getElementById("sliders");
@@ -37,7 +91,7 @@
     lastname: document.getElementById("lastname"),
     birthdate: document.getElementById("birthdate"),
     gender: document.getElementById("gender"),
-    nationality: document.getElementById("nationality")
+    nationality: document.getElementById("nationality"),
   };
 
   function clone(value) {
@@ -48,7 +102,7 @@
     return fetch(`https://${resource}/${name}`, {
       method: "POST",
       headers: { "Content-Type": "application/json; charset=UTF-8" },
-      body: JSON.stringify(data || {})
+      body: JSON.stringify(data || {}),
     }).then((response) => response.json());
   }
 
@@ -59,7 +113,9 @@
   }
 
   function getPath(target, path) {
-    return path.split(".").reduce((acc, key) => (acc ? acc[key] : undefined), target);
+    return path
+      .split(".")
+      .reduce((acc, key) => (acc ? acc[key] : undefined), target);
   }
 
   function setPath(target, path, value) {
@@ -76,20 +132,27 @@
   }
 
   function formatValue(value, step) {
-    return Number(step) < 1 ? Number(value).toFixed(2) : String(Math.floor(Number(value)));
+    return Number(step) < 1
+      ? Number(value).toFixed(2)
+      : String(Math.floor(Number(value)));
   }
 
   function schedulePreview() {
     clearTimeout(state.previewTimer);
     state.previewTimer = setTimeout(() => {
       if (!state.appearance) return;
-      post("previewAppearance", { appearance_json: state.appearance }).catch(() => {});
+      post("previewAppearance", { appearance_json: state.appearance }).catch(
+        () => {},
+      );
     }, 45);
   }
 
   function syncModelButtons() {
     document.querySelectorAll(".model-button").forEach((button) => {
-      button.classList.toggle("is-active", button.dataset.model === state.appearance?.model);
+      button.classList.toggle(
+        "is-active",
+        button.dataset.model === state.appearance?.model,
+      );
     });
   }
 
@@ -110,7 +173,7 @@
       birthdate: charinfo?.birthdate || "",
       gender: gender === "female" ? "female" : "male",
       nationality: charinfo?.nationality || "Brasileira",
-      phone: charinfo?.phone || ""
+      phone: charinfo?.phone || "",
     };
   }
 
@@ -130,7 +193,7 @@
       birthdate: identityEls.birthdate.value,
       gender: identityEls.gender.value,
       nationality: identityEls.nationality.value.trim(),
-      phone: state.identity?.phone || ""
+      phone: state.identity?.phone || "",
     };
   }
 
@@ -159,7 +222,10 @@
       input.value = String(value);
 
       input.addEventListener("input", () => {
-        const next = Number(def.step) < 1 ? Number(input.value) : Math.floor(Number(input.value));
+        const next =
+          Number(def.step) < 1
+            ? Number(input.value)
+            : Math.floor(Number(input.value));
         setPath(state.appearance, def.path, next);
         output.textContent = formatValue(next, def.step);
         schedulePreview();
@@ -181,13 +247,28 @@
     state.open = true;
     state.mode = data.mode || "manual";
     state.defaults = data.defaults || {};
-    state.appearance = clone(data.appearance || state.defaults.mp_m_freemode_01);
-    state.identity = buildIdentity(data.state?.player?.charinfo, state.appearance);
+    state.appearance = clone(
+      data.appearance || state.defaults.mp_m_freemode_01,
+    );
+    state.identity = buildIdentity(
+      data.state?.player?.charinfo,
+      state.appearance,
+    );
     document.body.classList.add("is-open");
     syncModelButtons();
     syncIdentityFields();
     setCameraButton("face");
     renderSliders();
+
+    // Oculta botões de rotação se não permitido
+    const rotateButtons = document.querySelectorAll(
+      "#rotate-left, #rotate-right",
+    );
+    if (data.allowCameraRotation === false) {
+      rotateButtons.forEach((btn) => (btn.style.display = "none"));
+    } else {
+      rotateButtons.forEach((btn) => (btn.style.display = ""));
+    }
   }
 
   function closeCreator() {
@@ -200,7 +281,11 @@
     post("close")
       .then((result) => {
         if (!result || result.ok !== true) {
-          showToast(result?.detail || result?.error || "Salve seu personagem antes de sair.");
+          showToast(
+            result?.detail ||
+              result?.error ||
+              "Salve seu personagem antes de sair.",
+          );
         }
       })
       .catch(() => {
@@ -289,11 +374,13 @@
 
     post("saveCharacter", {
       identity: state.identity,
-      appearance: state.appearance
+      appearance: state.appearance,
     })
       .then((result) => {
         if (!result || result.ok !== true) {
-          showToast(result?.detail || result?.error || "Nao foi possivel salvar.");
+          showToast(
+            result?.detail || result?.error || "Nao foi possivel salvar.",
+          );
         }
       })
       .catch(() => showToast("Nao foi possivel salvar."));
@@ -301,8 +388,10 @@
 
   window.addEventListener("keydown", (event) => {
     if (!state.open) return;
-    if (event.key.toLowerCase() === "a") post("rotate", { amount: -5 }).catch(() => {});
-    if (event.key.toLowerCase() === "d") post("rotate", { amount: 5 }).catch(() => {});
+    if (event.key.toLowerCase() === "a")
+      post("rotate", { amount: -5 }).catch(() => {});
+    if (event.key.toLowerCase() === "d")
+      post("rotate", { amount: 5 }).catch(() => {});
     if (event.key === "Escape") requestClose();
   });
 
