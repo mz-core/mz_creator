@@ -84,10 +84,15 @@ MZCreatorSchema.hair = {
 MZCreatorSchema.eyeColor = { min = 0, max = 31, integer = true }
 
 MZCreatorSchema.componentIds = {
+  ['1'] = true,
   ['3'] = true,
   ['4'] = true,
+  ['5'] = true,
   ['6'] = true,
+  ['7'] = true,
   ['8'] = true,
+  ['9'] = true,
+  ['10'] = true,
   ['11'] = true
 }
 
@@ -120,4 +125,3 @@ function MZCreatorSchema.clone(value)
   end
   return out
 end
-

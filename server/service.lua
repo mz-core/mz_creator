@@ -25,6 +25,18 @@ local function decodeJson(value, fallback)
   return result
 end
 
+local function cloneTable(value)
+  if type(value) ~= 'table' then
+    return value
+  end
+
+  local out = {}
+  for key, child in pairs(value) do
+    out[key] = cloneTable(child)
+  end
+  return out
+end
+
 local function getPayloadSize(value)
   if type(value) == 'string' then
     return #value
@@ -62,6 +74,44 @@ local function getPlayer(source)
   end
 
   return player
+end
+
+local function getCoreMetadataAppearance(source)
+  local ok, value = pcall(function()
+    return exports['mz_core']:GetMetadataValue(source, 'appearance')
+  end)
+
+  if ok and type(value) == 'table' then
+    return value
+  end
+
+  return nil
+end
+
+local function syncCoreAppearanceMetadata(source, appearance, markCharacterCreated)
+  if type(appearance) ~= 'table' then
+    return false
+  end
+
+  local ok, result = pcall(function()
+    return exports['mz_core']:SetMetadataValue(source, 'appearance', appearance)
+  end)
+
+  if not ok or result ~= true then
+    return false
+  end
+
+  pcall(function()
+    exports['mz_core']:SetMetadataValue(source, 'appearance_updated_at', os.time())
+  end)
+
+  if markCharacterCreated == true then
+    pcall(function()
+      exports['mz_core']:SetMetadataValue(source, 'character_created', true)
+    end)
+  end
+
+  return true
 end
 
 local function isPlainSafeKey(key)
@@ -610,6 +660,74 @@ function MZCreatorService.getAppearance(citizenid)
   }
 end
 
+local function getSavedOrMetadataAppearance(source, player, modelFallback)
+  local saved = player and MZCreatorService.getAppearance(player.citizenid) or nil
+  if saved and type(saved.appearance_json) == 'table' then
+    return cloneTable(saved.appearance_json)
+  end
+
+  local metadataAppearance = getCoreMetadataAppearance(source)
+  if type(metadataAppearance) == 'table' then
+    return cloneTable(metadataAppearance)
+  end
+
+  return MZCreatorDefaults.get(modelFallback or 'mp_m_freemode_01')
+end
+
+local function persistCurrentAppearance(source, player, appearance, markCharacterCreated)
+  local normalized, validationErr = MZCreatorService.normalizeAppearance(appearance)
+  if not normalized then
+    return nil, validationErr
+  end
+
+  MZCreatorRepository.upsert(player.citizenid, normalized.model, normalized)
+  syncCoreAppearanceMetadata(source, normalized, markCharacterCreated == true)
+
+  return normalized
+end
+
+local function mergeClothingIntoAppearance(baseAppearance, clothingAppearance)
+  local clothingModel = tostring(type(clothingAppearance) == 'table' and clothingAppearance.model or '')
+  local baseModel = tostring(type(baseAppearance) == 'table' and baseAppearance.model or '')
+  local model = baseModel ~= '' and baseModel or clothingModel
+
+  if clothingModel ~= '' and clothingModel ~= model and MZCreatorSchema.allowedModels[clothingModel] == true then
+    model = clothingModel
+    baseAppearance = MZCreatorDefaults.get(model)
+  else
+    baseAppearance = cloneTable(baseAppearance or MZCreatorDefaults.get(model))
+  end
+
+  baseAppearance.model = model
+  baseAppearance.version = MZCreatorSchema.version
+  baseAppearance.components = type(baseAppearance.components) == 'table' and baseAppearance.components or {}
+  baseAppearance.props = type(baseAppearance.props) == 'table' and baseAppearance.props or {}
+
+  if type(clothingAppearance.components) == 'table' then
+    for id, item in pairs(clothingAppearance.components) do
+      if type(item) == 'table' then
+        baseAppearance.components[tostring(id)] = {
+          drawable = item.drawable,
+          texture = item.texture
+        }
+      end
+    end
+  end
+
+  if type(clothingAppearance.props) == 'table' then
+    for id, item in pairs(clothingAppearance.props) do
+      if type(item) == 'table' then
+        baseAppearance.props[tostring(id)] = {
+          drawable = item.drawable,
+          texture = item.texture
+        }
+      end
+    end
+  end
+
+  return baseAppearance
+end
+
 function MZCreatorService.hasCreatedCharacter(source)
   local player = getPlayer(source)
   if not player or not player.citizenid then
@@ -624,7 +742,11 @@ function MZCreatorService.hasCreatedCharacter(source)
     return true
   end
 
-  return MZCreatorService.getAppearance(player.citizenid) ~= nil
+  if MZCreatorService.getAppearance(player.citizenid) ~= nil then
+    return true
+  end
+
+  return getCoreMetadataAppearance(source) ~= nil
 end
 
 function MZCreatorService.getState(source)
@@ -637,6 +759,10 @@ function MZCreatorService.getState(source)
   end
 
   local appearance = MZCreatorService.getAppearance(player.citizenid)
+  local metadataAppearance = nil
+  if not appearance then
+    metadataAppearance = getCoreMetadataAppearance(source)
+  end
   local characterCreated = false
   local metadataOk, metadataValue = pcall(function()
     return exports['mz_core']:GetMetadataValue(source, 'character_created')
@@ -646,6 +772,13 @@ function MZCreatorService.getState(source)
     characterCreated = metadataValue == true
   end
 
+  if characterCreated ~= true and type(metadataAppearance) == 'table' then
+    characterCreated = true
+  end
+
+  local resolvedAppearance = appearance and appearance.appearance_json or metadataAppearance
+  local resolvedModel = appearance and appearance.model or (type(metadataAppearance) == 'table' and metadataAppearance.model or nil)
+
   return {
     ok = true,
     player = {
@@ -654,9 +787,9 @@ function MZCreatorService.getState(source)
       charinfo = player.charinfo or {}
     },
     characterCreated = characterCreated,
-    hasAppearance = appearance ~= nil,
-    appearance = appearance and appearance.appearance_json or nil,
-    model = appearance and appearance.model or nil
+    hasAppearance = type(resolvedAppearance) == 'table',
+    appearance = resolvedAppearance,
+    model = resolvedModel
   }
 end
 
@@ -669,15 +802,13 @@ function MZCreatorService.saveAppearance(source, payload)
     }
   end
 
-  local appearance, validationErr = MZCreatorService.normalizeAppearance(payload)
+  local appearance, validationErr = persistCurrentAppearance(source, player, payload, false)
   if not appearance then
     return validationErr or {
       ok = false,
       error = 'invalid_appearance'
     }
   end
-
-  MZCreatorRepository.upsert(player.citizenid, appearance.model, appearance)
 
   return {
     ok = true,
@@ -784,19 +915,16 @@ function MZCreatorService.saveCharacter(source, payload)
     }
   end
 
-  MZCreatorRepository.upsert(player.citizenid, appearance.model, appearance)
-
-  local metadataOk, metadataResult, metadataErr = pcall(function()
-    return exports['mz_core']:SetMetadataValue(source, 'character_created', true)
-  end)
-
-  if not metadataOk or metadataResult ~= true then
+  local persistedAppearance, persistErr = persistCurrentAppearance(source, player, appearance, true)
+  if not persistedAppearance then
     return {
       ok = false,
-      error = 'metadata_save_failed',
-      detail = metadataErr
+      error = 'appearance_save_failed',
+      detail = persistErr and (persistErr.detail or persistErr.error) or nil
     }
   end
+
+  appearance = persistedAppearance
 
   return {
     ok = true,
@@ -813,11 +941,52 @@ function MZCreatorService.applyAppearance(source)
     return false, 'player_not_loaded'
   end
 
-  local appearance = MZCreatorService.getAppearance(player.citizenid)
-  if not appearance then
+  local savedAppearance = MZCreatorService.getAppearance(player.citizenid)
+  local appearance = savedAppearance and savedAppearance.appearance_json or getCoreMetadataAppearance(source)
+  if type(appearance) ~= 'table' then
     return false, 'appearance_not_found'
   end
 
-  TriggerClientEvent('mz_creator:client:applyAppearance', source, appearance.appearance_json)
+  TriggerClientEvent('mz_creator:client:applyAppearance', source, appearance)
   return true
+end
+
+function MZCreatorService.mergeClothingAppearance(source, clothingAppearance)
+  local player = getPlayer(source)
+  if not player or not player.citizenid then
+    return {
+      ok = false,
+      error = 'player_not_loaded'
+    }
+  end
+
+  if type(clothingAppearance) ~= 'table' then
+    return {
+      ok = false,
+      error = 'invalid_clothing_appearance'
+    }
+  end
+
+  local model = tostring(clothingAppearance.model or '')
+  if MZCreatorSchema.allowedModels[model] ~= true then
+    model = 'mp_m_freemode_01'
+  end
+
+  local baseAppearance = getSavedOrMetadataAppearance(source, player, model)
+  local mergedAppearance = mergeClothingIntoAppearance(baseAppearance, clothingAppearance)
+  local persistedAppearance, persistErr = persistCurrentAppearance(source, player, mergedAppearance, true)
+
+  if not persistedAppearance then
+    return {
+      ok = false,
+      error = 'appearance_save_failed',
+      detail = persistErr and (persistErr.detail or persistErr.error) or nil
+    }
+  end
+
+  return {
+    ok = true,
+    citizenid = player.citizenid,
+    appearance = persistedAppearance
+  }
 end

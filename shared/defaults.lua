@@ -62,10 +62,15 @@ local function baseAppearance(model)
     },
     eyeColor = 0,
     components = {
+      ['1'] = { drawable = 0, texture = 0 },
       ['3'] = { drawable = 15, texture = 0 },
       ['4'] = { drawable = isFemale and 15 or 21, texture = 0 },
+      ['5'] = { drawable = 0, texture = 0 },
       ['6'] = { drawable = isFemale and 35 or 34, texture = 0 },
+      ['7'] = { drawable = 0, texture = 0 },
       ['8'] = { drawable = 15, texture = 0 },
+      ['9'] = { drawable = 0, texture = 0 },
+      ['10'] = { drawable = 0, texture = 0 },
       ['11'] = { drawable = 15, texture = 0 }
     },
     props = {
