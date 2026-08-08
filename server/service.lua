@@ -66,7 +66,7 @@ end
 
 local function getPlayer(source)
   local ok, player = pcall(function()
-    return exports['mz_core']:GetPlayer(source)
+    return exports['mz_core']:GetPlayerSnapshot(source)
   end)
 
   if not ok then

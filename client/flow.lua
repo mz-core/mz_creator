@@ -4,7 +4,8 @@ MZCreatorFlow = {
   savedAppearance = nil,
   currentAppearance = nil,
   previousCoords = nil,
-  previousHeading = nil
+  previousHeading = nil,
+  securityLifecycleId = nil
 }
 
 local autoOpenChecked = false
@@ -98,10 +99,16 @@ local function closeCreator(cancelled)
     end
   end
 
+  local securityLifecycleId = MZCreatorFlow.securityLifecycleId
   MZCreatorFlow.open = false
   MZCreatorFlow.mode = 'manual'
   MZCreatorFlow.previousCoords = nil
   MZCreatorFlow.previousHeading = nil
+  MZCreatorFlow.securityLifecycleId = nil
+  if type(securityLifecycleId) == 'string' and securityLifecycleId ~= '' then
+    TriggerServerEvent('mz_creator:server:endSecuritySession', securityLifecycleId,
+      cancelled == true and 'creator_cancelled' or 'creator_saved')
+  end
   return true
 end
 
@@ -110,7 +117,10 @@ function MZCreatorFlow.openCreator(mode, preloadedState)
     return
   end
 
-  local state = preloadedState or lib.callback.await('mz_creator:server:getState', false)
+  local state = preloadedState
+  if type(state) ~= 'table' or type(state.securityLifecycleId) ~= 'string' then
+    state = lib.callback.await('mz_creator:server:beginSecuritySession', false)
+  end
   if not state or state.ok ~= true then
     notify({
       type = 'error',
@@ -126,6 +136,7 @@ function MZCreatorFlow.openCreator(mode, preloadedState)
   MZCreatorFlow.mode = mode or 'manual'
   MZCreatorFlow.savedAppearance = state.appearance
   MZCreatorFlow.currentAppearance = appearance
+  MZCreatorFlow.securityLifecycleId = state.securityLifecycleId
 
   -- Salvar posição anterior
   local ped = PlayerPedId()

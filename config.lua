@@ -19,13 +19,12 @@ Config.Creator = {
   },
   -- Local onde o criador de personagem será aberto
   spawnLocation = {
-    coords = vec3(-797.70, 328.30, 219.44),
-    heading = 350.61
+    coords = vec3(-779.76, 329.35, 206.62),
+    heading = 1.49
   },
   -- Desabilitar rotação da câmera com A/D (câmera parada)
   allowCameraRotation = false
 }
-
 
 
 Config.AutoOpen = {

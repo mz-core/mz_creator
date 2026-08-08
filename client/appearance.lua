@@ -49,10 +49,11 @@ local function ensureModel(modelName)
 
   local model = loadModel(modelName)
   if not model then
-    return PlayerPedId()
+    return PlayerPedId(), false
   end
 
-  if GetEntityModel(PlayerPedId()) ~= model then
+  local modelChanged = GetEntityModel(PlayerPedId()) ~= model
+  if modelChanged then
     SetPlayerModel(PlayerId(), model)
     SetModelAsNoLongerNeeded(model)
     Wait(150)
@@ -60,7 +61,7 @@ local function ensureModel(modelName)
     ClearAllPedProps(PlayerPedId())
   end
 
-  return PlayerPedId()
+  return PlayerPedId(), modelChanged
 end
 
 local function applyHeadBlend(ped, headBlend)
@@ -173,7 +174,7 @@ function MZCreatorAppearance.apply(appearance)
     return false, 'invalid_model'
   end
 
-  local ped = ensureModel(model)
+  local ped, modelChanged = ensureModel(model)
   if not ped or ped == 0 then
     return false, 'invalid_ped'
   end
@@ -185,6 +186,10 @@ function MZCreatorAppearance.apply(appearance)
   SetPedEyeColor(ped, integerOr(appearance.eyeColor, 0))
   applyComponents(ped, appearance.components)
   applyProps(ped, appearance.props)
+
+  if modelChanged then
+    TriggerEvent('mz_core:client:pedModelReady', { reason = 'creator_model_applied' })
+  end
 
   return true
 end
