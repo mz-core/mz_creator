@@ -11,6 +11,10 @@ MZCreatorFlow = {
 local autoOpenChecked = false
 local spawnAppearanceApplying = false
 
+local function suppressHud(suppressed)
+  TriggerEvent('mz_hud:client:setSuppressed', 'mz_creator', suppressed == true)
+end
+
 local function notify(message)
   if lib and lib.notify then
     lib.notify(message)
@@ -85,6 +89,7 @@ local function closeCreator(cancelled)
   SetNuiFocus(false, false)
   SendNUIMessage({ action = 'close' })
   MZCreatorCamera.close()
+  suppressHud(false)
 
   if cancelled and MZCreatorFlow.savedAppearance then
     MZCreatorAppearance.apply(MZCreatorFlow.savedAppearance)
@@ -137,6 +142,7 @@ function MZCreatorFlow.openCreator(mode, preloadedState)
   MZCreatorFlow.savedAppearance = state.appearance
   MZCreatorFlow.currentAppearance = appearance
   MZCreatorFlow.securityLifecycleId = state.securityLifecycleId
+  suppressHud(true)
 
   -- Salvar posição anterior
   local ped = PlayerPedId()
@@ -351,5 +357,19 @@ CreateThread(function()
     else
       Wait(500)
     end
+  end
+end)
+
+AddEventHandler('onResourceStop', function(resourceName)
+  if resourceName ~= GetCurrentResourceName() then
+    return
+  end
+
+  suppressHud(false)
+end)
+
+AddEventHandler('onClientResourceStart', function(resourceName)
+  if resourceName == 'mz_hud' and MZCreatorFlow.open then
+    suppressHud(true)
   end
 end)
