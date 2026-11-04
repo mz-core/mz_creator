@@ -1,6 +1,7 @@
 Config = Config or {}
 
 Config.Creator = {
+  debug = true,
   command = 'creator_test',
   maxPayloadBytes = 65536,
   maxTableDepth = 5,
@@ -11,6 +12,9 @@ Config.Creator = {
   },
   applySavedAppearanceOnSpawn = true,
   applySavedAppearanceDelayMs = 800,
+  sceneTimeoutMs = 5000,
+  fadeOutMs = 250,
+  fadeInMs = 500,
   defaultCameraMode = 'face',
   cameraStartRotation = 90.0,
   cameraModes = {

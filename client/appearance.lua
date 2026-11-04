@@ -190,6 +190,7 @@ function MZCreatorAppearance.apply(appearance)
   if modelChanged then
     TriggerEvent('mz_core:client:pedModelReady', { reason = 'creator_model_applied' })
   end
+  TriggerEvent('mz_creator:client:appearanceApplied')
 
   return true
 end

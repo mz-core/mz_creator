@@ -3,9 +3,12 @@ MZCreatorFlow = {
   mode = 'manual',
   savedAppearance = nil,
   currentAppearance = nil,
+  currentState = nil,
   previousCoords = nil,
   previousHeading = nil,
-  securityLifecycleId = nil
+  securityLifecycleId = nil,
+  sceneFocusOwned = false,
+  awaitingCoreSpawn = false
 }
 
 local autoOpenChecked = false
@@ -24,6 +27,159 @@ local function notify(message)
   print(('[mz_creator] %s'):format(message.description or message.message or message.title or 'notification'))
 end
 
+local function creatorConfig()
+  return Config.Creator or {}
+end
+
+local function debugLog(message, ...)
+  if creatorConfig().debug ~= true then return end
+  print(('[MZ_CREATOR][CLIENT] ' .. message):format(...))
+end
+
+local function errorLog(message, ...)
+  print(('[MZ_CREATOR][CLIENT][ERROR] ' .. message):format(...))
+end
+
+local function nativeBool(value)
+  return value == true or value == 1
+end
+
+local function waitForFadeOut()
+  local cfg = creatorConfig()
+  debugLog('screenFadedOut=%s', tostring(nativeBool(IsScreenFadedOut())))
+  if nativeBool(IsScreenFadedOut()) then return true end
+
+  local duration = tonumber(cfg.fadeOutMs) or 250
+  DoScreenFadeOut(duration)
+  local deadline = GetGameTimer() + duration + 2000
+  while not nativeBool(IsScreenFadedOut()) and GetGameTimer() < deadline do Wait(0) end
+  return nativeBool(IsScreenFadedOut())
+end
+
+local function fadeIn()
+  local duration = tonumber(creatorConfig().fadeInMs) or 500
+  DoScreenFadeIn(duration)
+  debugLog('fadeIn')
+  local deadline = GetGameTimer() + duration + 2000
+  while not nativeBool(IsScreenFadedIn()) and GetGameTimer() < deadline do Wait(0) end
+  return nativeBool(IsScreenFadedIn())
+end
+
+local function clearSceneFocus()
+  if not MZCreatorFlow.sceneFocusOwned then return end
+  ClearFocus()
+  MZCreatorFlow.sceneFocusOwned = false
+end
+
+local function releaseCreatorVisuals()
+  SetNuiFocus(false, false)
+  SendNUIMessage({ action = 'close' })
+  MZCreatorCamera.close()
+  clearSceneFocus()
+  suppressHud(false)
+end
+
+local function prepareCreatorScene(appearance)
+  local cfg = creatorConfig()
+  local spawn = cfg.spawnLocation
+  local coords = spawn and spawn.coords or nil
+  if not coords then return false, 'scene_coordinates_missing' end
+
+  local appearanceOk, appearanceErr = MZCreatorAppearance.apply(appearance)
+  if appearanceOk ~= true then return false, appearanceErr or 'appearance_apply_failed' end
+
+  local ped = PlayerPedId()
+  if not ped or ped == 0 or not nativeBool(DoesEntityExist(ped)) then return false, 'invalid_ped' end
+
+  RequestCollisionAtCoord(coords.x, coords.y, coords.z)
+  SetFocusPosAndVel(coords.x, coords.y, coords.z, 0.0, 0.0, 0.0)
+  MZCreatorFlow.sceneFocusOwned = true
+
+  SetEntityCoordsNoOffset(ped, coords.x, coords.y, coords.z, false, false, false)
+  SetEntityHeading(ped, tonumber(spawn.heading) or 0.0)
+  SetEntityVisible(ped, true, false)
+  SetEntityCollision(ped, true, true)
+  FreezeEntityPosition(ped, true)
+  SetPlayerInvincible(PlayerId(), true)
+  SetEntityInvincible(ped, true)
+
+  local interior = GetInteriorAtCoords(coords.x, coords.y, coords.z)
+  if interior and interior ~= 0 then LoadInterior(interior) end
+
+  local deadline = GetGameTimer() + (tonumber(cfg.sceneTimeoutMs) or 5000)
+  local collisionReady = nativeBool(HasCollisionLoadedAroundEntity(ped))
+  local interiorReady = not interior or interior == 0 or nativeBool(IsInteriorReady(interior))
+  while (not collisionReady or not interiorReady) and GetGameTimer() < deadline do
+    RequestCollisionAtCoord(coords.x, coords.y, coords.z)
+    Wait(50)
+    collisionReady = nativeBool(HasCollisionLoadedAroundEntity(ped))
+    interiorReady = not interior or interior == 0 or nativeBool(IsInteriorReady(interior))
+  end
+
+  local pedCoords = GetEntityCoords(ped)
+  debugLog('pedPosition x=%.2f y=%.2f z=%.2f heading=%.2f',
+    pedCoords.x, pedCoords.y, pedCoords.z, GetEntityHeading(ped))
+  debugLog('sceneReady collision=%s interior=%s', tostring(collisionReady), tostring(interiorReady))
+  if not collisionReady or not interiorReady then return false, 'scene_load_timeout' end
+  return true
+end
+
+local function openCreatorVisuals(state, appearance)
+  if not waitForFadeOut() then
+    errorLog('fade_out_timeout')
+    fadeIn()
+    return false
+  end
+
+  local sceneOk, sceneErr = prepareCreatorScene(appearance)
+  if not sceneOk then
+    errorLog('scene_failed error=%s', tostring(sceneErr))
+    releaseCreatorVisuals()
+    fadeIn()
+    return false
+  end
+
+  local cameraOk = MZCreatorCamera.open(creatorConfig().defaultCameraMode or 'face')
+  if cameraOk ~= true then
+    debugLog('cameraActive=false')
+    errorLog('camera_creation_failed')
+    releaseCreatorVisuals()
+    fadeIn()
+    return false
+  end
+  debugLog('cameraCreated')
+  debugLog('cameraActive=true')
+
+  if not fadeIn() then
+    errorLog('fade_in_timeout')
+    releaseCreatorVisuals()
+    return false
+  end
+  SetNuiFocus(true, true)
+  SendNUIMessage({
+    action = 'open',
+    mode = MZCreatorFlow.mode,
+    state = state,
+    appearance = appearance,
+    defaults = MZCreatorDefaults.byModel,
+    allowedModels = {
+      'mp_m_freemode_01',
+      'mp_f_freemode_01'
+    },
+    allowCameraRotation = creatorConfig().allowCameraRotation ~= false
+  })
+  debugLog('uiOpened')
+  return true
+end
+
+local function beginCoreHandoff()
+  if not waitForFadeOut() then return false end
+  releaseCreatorVisuals()
+  MZCreatorFlow.awaitingCoreSpawn = true
+  debugLog('coreHandoff')
+  return true
+end
+
 local function getDefaultAppearance(model)
   return MZCreatorAppearance.defaultForModel(model or 'mp_m_freemode_01')
 end
@@ -31,6 +187,10 @@ end
 local function isFirstLoginMode()
   local autoConfig = Config.AutoOpen or {}
   return MZCreatorFlow.mode == (autoConfig.mode or 'first_login')
+end
+
+local function isMulticharCreationMode()
+  return MZCreatorFlow.mode == 'multichar_create'
 end
 
 local function shouldApplySavedAppearance()
@@ -71,7 +231,8 @@ local function applySavedAppearanceAfterSpawn()
   end)
 end
 
-local function closeCreator(cancelled)
+local function closeCreator(cancelled, options)
+  options = options or {}
   if not MZCreatorFlow.open then
     return true
   end
@@ -86,17 +247,29 @@ local function closeCreator(cancelled)
     return false
   end
 
-  SetNuiFocus(false, false)
-  SendNUIMessage({ action = 'close' })
-  MZCreatorCamera.close()
-  suppressHud(false)
+
+  if cancelled and isMulticharCreationMode() then
+    local result = lib.callback.await('mz_creator:server:cancelPendingCharacter', false)
+    if not result or result.ok ~= true then
+      notify({
+        type = 'error',
+        title = 'Creator',
+        description = 'Nao foi possivel cancelar a criacao.'
+      })
+      return false
+    end
+  end
+
+  if options.visualsAlreadyClosed ~= true then
+    releaseCreatorVisuals()
+  end
 
   if cancelled and MZCreatorFlow.savedAppearance then
     MZCreatorAppearance.apply(MZCreatorFlow.savedAppearance)
   end
 
   -- Restaurar posição anterior se existir
-  if MZCreatorFlow.previousCoords then
+  if MZCreatorFlow.previousCoords and not isMulticharCreationMode() then
     local ped = PlayerPedId()
     SetEntityCoords(ped, MZCreatorFlow.previousCoords.x, MZCreatorFlow.previousCoords.y, MZCreatorFlow.previousCoords.z, false, false, false, false)
     if MZCreatorFlow.previousHeading then
@@ -107,9 +280,13 @@ local function closeCreator(cancelled)
   local securityLifecycleId = MZCreatorFlow.securityLifecycleId
   MZCreatorFlow.open = false
   MZCreatorFlow.mode = 'manual'
+  MZCreatorFlow.currentState = nil
   MZCreatorFlow.previousCoords = nil
   MZCreatorFlow.previousHeading = nil
   MZCreatorFlow.securityLifecycleId = nil
+  if options.preserveCoreSpawn ~= true then
+    MZCreatorFlow.awaitingCoreSpawn = false
+  end
   if type(securityLifecycleId) == 'string' and securityLifecycleId ~= '' then
     TriggerServerEvent('mz_creator:server:endSecuritySession', securityLifecycleId,
       cancelled == true and 'creator_cancelled' or 'creator_saved')
@@ -137,11 +314,14 @@ function MZCreatorFlow.openCreator(mode, preloadedState)
 
   local appearance = state.appearance or getDefaultAppearance('mp_m_freemode_01')
 
+  debugLog('open mode=%s', tostring(mode or 'manual'))
   MZCreatorFlow.open = true
   MZCreatorFlow.mode = mode or 'manual'
   MZCreatorFlow.savedAppearance = state.appearance
   MZCreatorFlow.currentAppearance = appearance
+  MZCreatorFlow.currentState = state
   MZCreatorFlow.securityLifecycleId = state.securityLifecycleId
+  MZCreatorFlow.awaitingCoreSpawn = false
   suppressHud(true)
 
   -- Salvar posição anterior
@@ -149,32 +329,21 @@ function MZCreatorFlow.openCreator(mode, preloadedState)
   MZCreatorFlow.previousCoords = GetEntityCoords(ped)
   MZCreatorFlow.previousHeading = GetEntityHeading(ped)
 
-  -- Teleportar para spawn location do creator
-  local creatorConfig = Config.Creator or {}
-  local spawnLoc = creatorConfig.spawnLocation
-  if spawnLoc and spawnLoc.coords then
-    SetEntityCoords(ped, spawnLoc.coords.x, spawnLoc.coords.y, spawnLoc.coords.z, false, false, false, false)
-    if spawnLoc.heading then
-      SetEntityHeading(ped, spawnLoc.heading)
+  if not openCreatorVisuals(state, appearance) then
+    local securityLifecycleId = MZCreatorFlow.securityLifecycleId
+    MZCreatorFlow.open = false
+    MZCreatorFlow.mode = 'manual'
+    MZCreatorFlow.currentState = nil
+    MZCreatorFlow.securityLifecycleId = nil
+    if type(securityLifecycleId) == 'string' and securityLifecycleId ~= '' then
+      TriggerServerEvent('mz_creator:server:endSecuritySession', securityLifecycleId, 'creator_scene_failed')
     end
+    notify({
+      type = 'error',
+      title = 'Creator',
+      description = 'A cena de criacao nao carregou. Consulte o F8 e reconecte.'
+    })
   end
-
-  MZCreatorAppearance.apply(appearance)
-  MZCreatorCamera.open(Config.Creator and Config.Creator.defaultCameraMode or 'face')
-
-  SetNuiFocus(true, true)
-  SendNUIMessage({
-    action = 'open',
-    mode = MZCreatorFlow.mode,
-    state = state,
-    appearance = appearance,
-    defaults = MZCreatorDefaults.byModel,
-    allowedModels = {
-      'mp_m_freemode_01',
-      'mp_f_freemode_01'
-    },
-    allowCameraRotation = (Config.Creator and Config.Creator.allowCameraRotation) ~= false
-  })
 end
 
 RegisterNetEvent('mz_creator:client:open', function(mode)
@@ -310,19 +479,37 @@ RegisterNUICallback('saveCharacter', function(data, cb)
     return
   end
 
+  local handingOffToCore = isMulticharCreationMode()
+  if handingOffToCore and not beginCoreHandoff() then
+    cb({ ok = false, error = 'creator_fade_out_failed' })
+    return
+  end
+
   local result = lib.callback.await('mz_creator:server:saveCharacter', false, {
     identity = identity,
     appearance = {
       model = appearance.model,
       appearance_json = appearance
     },
-    spawn = data.spawn
+    spawn = data.spawn,
+    requestId = ('creator:%s:%s'):format(GetGameTimer(), math.random(100000, 999999))
   })
 
   if result and result.ok == true then
     MZCreatorFlow.savedAppearance = result.appearance
-    MZCreatorAppearance.apply(result.appearance)
-    closeCreator(false)
+    if not handingOffToCore then
+      MZCreatorAppearance.apply(result.appearance)
+    end
+    closeCreator(false, {
+      visualsAlreadyClosed = handingOffToCore,
+      preserveCoreSpawn = handingOffToCore
+    })
+  elseif handingOffToCore then
+    MZCreatorFlow.awaitingCoreSpawn = false
+    suppressHud(true)
+    if not openCreatorVisuals(MZCreatorFlow.currentState or {}, MZCreatorFlow.currentAppearance or appearance) then
+      errorLog('handoff_recovery_failed error=%s', tostring(result and result.error or 'save_failed'))
+    end
   end
 
   cb(result or { ok = false, error = 'save_failed' })
@@ -360,12 +547,26 @@ CreateThread(function()
   end
 end)
 
+RegisterNetEvent('mz_core:client:pedModelReady', function(payload)
+  if type(payload) ~= 'table' or payload.reason ~= 'core_spawn_complete'
+    or MZCreatorFlow.awaitingCoreSpawn ~= true then return end
+  MZCreatorFlow.awaitingCoreSpawn = false
+  debugLog('spawnComplete')
+  fadeIn()
+end)
+
 AddEventHandler('onResourceStop', function(resourceName)
   if resourceName ~= GetCurrentResourceName() then
     return
   end
 
-  suppressHud(false)
+  if MZCreatorFlow.open or MZCreatorCamera.active then
+    releaseCreatorVisuals()
+    fadeIn()
+  else
+    suppressHud(false)
+    clearSceneFocus()
+  end
 end)
 
 AddEventHandler('onClientResourceStart', function(resourceName)

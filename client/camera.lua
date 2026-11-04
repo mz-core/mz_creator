@@ -5,6 +5,10 @@ MZCreatorCamera = {
   orbitalRotation = 0.0
 }
 
+local function nativeBool(value)
+  return value == true or value == 1
+end
+
 local function getModeConfig(mode)
   local creatorConfig = Config.Creator or {}
   local modes = creatorConfig.cameraModes or {}
@@ -26,6 +30,7 @@ local function lockCurrentPed()
   end
 
   FreezeEntityPosition(ped, true)
+  SetEntityVisible(ped, true, false)
   SetPlayerInvincible(PlayerId(), true)
   SetEntityInvincible(ped, true)
   SetEntityCollision(ped, true, true)
@@ -78,20 +83,28 @@ function MZCreatorCamera.open(mode)
 
   lockCurrentPed()
 
-  if MZCreatorCamera.cam and DoesCamExist(MZCreatorCamera.cam) then
+  if MZCreatorCamera.cam and nativeBool(DoesCamExist(MZCreatorCamera.cam)) then
     DestroyCam(MZCreatorCamera.cam, false)
   end
 
-  MZCreatorCamera.cam = CreateCam('DEFAULT_SCRIPTED_CAMERA', true)
+  MZCreatorCamera.cam = CreateCam('DEFAULT_SCRIPTED_CAMERA', false)
+  if not MZCreatorCamera.cam or MZCreatorCamera.cam == 0
+    or not nativeBool(DoesCamExist(MZCreatorCamera.cam)) then
+    MZCreatorCamera.cam = nil
+    MZCreatorCamera.active = false
+    return false
+  end
+
+  pointCameraAtPed()
   SetCamActive(MZCreatorCamera.cam, true)
   RenderScriptCams(true, true, 300, true, true)
-  pointCameraAtPed()
+  return nativeBool(IsCamActive(MZCreatorCamera.cam))
 end
 
 function MZCreatorCamera.close()
   local ped = PlayerPedId()
 
-  if MZCreatorCamera.cam and DoesCamExist(MZCreatorCamera.cam) then
+  if MZCreatorCamera.cam and nativeBool(DoesCamExist(MZCreatorCamera.cam)) then
     SetCamActive(MZCreatorCamera.cam, false)
     RenderScriptCams(false, true, 300, true, true)
     DestroyCam(MZCreatorCamera.cam, false)

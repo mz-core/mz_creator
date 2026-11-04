@@ -50,6 +50,14 @@ lib.callback.register('mz_creator:server:saveCharacter', function(source, payloa
   return MZCreatorService.saveCharacter(source, payload)
 end)
 
+lib.callback.register('mz_creator:server:cancelPendingCharacter', function(source)
+  local ok, cancelled, err = pcall(function()
+    return exports['mz_core']:CancelPendingCharacter(source)
+  end)
+  if not ok then return { ok = false, error = 'core_unavailable' } end
+  return { ok = cancelled == true, error = cancelled == true and nil or err }
+end)
+
 RegisterNetEvent('mz_creator:server:saveAppearance', function(payload)
   local src = source
   local result = MZCreatorService.saveAppearance(src, payload)

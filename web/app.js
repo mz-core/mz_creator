@@ -17,7 +17,6 @@
     { id: "beard", label: "Barba", icon: "beard", helper: "Configure barba, pelos faciais e corporais.", camera: "face" },
     { id: "makeup", label: "Maquiagem", icon: "palette", helper: "Aplique maquiagem, blush e batom.", camera: "face" },
     { id: "marks", label: "Marcas", icon: "star", helper: "Adicione sardas, sinais e imperfeições.", camera: "face" },
-    { id: "clothing", label: "Roupa", icon: "shirt", helper: "Monte o visual inicial do personagem.", camera: "body" },
     { id: "review", label: "Revisão", icon: "clipboard", helper: "Revise os dados antes de salvar.", camera: "body" },
   ];
 
@@ -684,7 +683,6 @@
       beard: beardSettings,
       makeup: makeupSettings,
       marks: marksSettings,
-      clothing: clothingSettings,
       review: reviewSettings,
     };
     settingsContentEl.innerHTML = (renderers[state.activeCategory] || identitySettings)();
