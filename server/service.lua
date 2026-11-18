@@ -78,7 +78,7 @@ local function getPlayer(source)
   local pendingOk, pending = pcall(function()
     return exports['mz_core']:GetPendingCharacterSnapshot(source)
   end)
-  if pendingOk then return pending end
+  if pendingOk then return pending, pending ~= nil end
   return nil
 end
 
@@ -768,7 +768,7 @@ function MZCreatorService.saveCharacter(source, payload)
     }
   end
 
-  local player = getPlayer(source)
+  local player, pending = getPlayer(source)
   if not player or not player.citizenid then
     return {
       ok = false,
@@ -785,7 +785,7 @@ function MZCreatorService.saveCharacter(source, payload)
     phone = identity.phone or ''
   }
 
-  if tostring(player.status or '') == 'creating' then
+  if pending then
     local requestId = tostring(payload.requestId or '')
     if #requestId < 8 or #requestId > 96 or not requestId:match('^[%w%._:%-]+$') then
       return { ok = false, error = 'invalid_request_id' }

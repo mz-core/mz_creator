@@ -13,6 +13,7 @@ MZCreatorFlow = {
 
 local autoOpenChecked = false
 local spawnAppearanceApplying = false
+local spawnReapplyPending = false
 
 local function suppressHud(suppressed)
   TriggerEvent('mz_hud:client:setSuppressed', 'mz_creator', suppressed == true)
@@ -214,20 +215,17 @@ local function applySavedAppearanceAfterSpawn()
   spawnAppearanceApplying = true
 
   CreateThread(function()
-    local creatorConfig = Config.Creator or {}
-    local delay = tonumber(creatorConfig.applySavedAppearanceDelayMs) or 800
-    if delay > 0 then
-      Wait(delay)
-    end
-
-    if not MZCreatorFlow.open then
-      local state = lib.callback.await('mz_creator:server:getState', false)
-      if state and state.characterCreated == true then
-        applySavedAppearance(state)
+    local ok, err = xpcall(function()
+      local creatorConfig = Config.Creator or {}
+      local delay = tonumber(creatorConfig.applySavedAppearanceDelayMs) or 800
+      if delay > 0 then Wait(delay) end
+      if not MZCreatorFlow.open then
+        local state = lib.callback.await('mz_creator:server:getState', false)
+        if state and state.characterCreated == true then applySavedAppearance(state) end
       end
-    end
-
+    end, debug.traceback)
     spawnAppearanceApplying = false
+    if not ok then print(('[mz_creator] saved appearance application failed: %s'):format(tostring(err))) end
   end)
 end
 
@@ -391,6 +389,17 @@ end)
 
 AddEventHandler('playerSpawned', function()
   applySavedAppearanceAfterSpawn()
+end)
+
+AddEventHandler('mz_core:client:pedModelReady', function(payload)
+  if type(payload) ~= 'table' or payload.reason ~= 'core_spawn_complete' or spawnReapplyPending then return end
+  spawnReapplyPending = true
+  CreateThread(function()
+    local waits = 0
+    while spawnAppearanceApplying and waits < 200 do Wait(50); waits = waits + 1 end
+    spawnReapplyPending = false
+    if not spawnAppearanceApplying then applySavedAppearanceAfterSpawn() end
+  end)
 end)
 
 RegisterNUICallback('ready', function(_, cb)

@@ -5,7 +5,7 @@ lua54 'yes'
 name 'mz_creator'
 author 'Mazus'
 description 'Manual appearance creator for mz_core'
-version '0.1.0'
+version '0.1.1'
 
 ui_page 'web/index.html'
 
